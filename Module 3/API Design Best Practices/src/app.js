@@ -1,23 +1,42 @@
+
 const express = require('express');
 const postRoutes = require('./routes/postRoutes');
 const { resetData } = require('./data/postStore');
-const controller = require('./controllers/postController');
 
 function createApp() {
   const app = express();
+
   app.use(express.json());
 
+  // Resource-oriented API routes
   app.use('/', postRoutes);
-  app.get('/explode', controller.explode);
 
-  // TODO:
-  // - make public contract resource-oriented
-  // - standardise success envelope
-  // - standardise error envelope
-  // - add pagination metadata on list route
-  // - cap limit server-side (default limit = 2 for exercise)
-  // - stop exposing old verb routes as public contract
-  // - expose safe internal failure route for testing/demo
+  // Handle invalid JSON and other unexpected errors safely
+  app.use((err, req, res, next) => {
+    console.error('API error:', err);
+
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_JSON',
+          message: 'Request body contains invalid JSON'
+        }
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred'
+      }
+    });
+  });
 
   return app;
 }
@@ -25,6 +44,7 @@ function createApp() {
 if (require.main === module) {
   const app = createApp();
   const port = 3000;
+
   app.listen(port, () => {
     console.log(`Starter API listening on port ${port}`);
   });
